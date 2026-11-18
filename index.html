@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ako merať osciloskopom</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Laboratórny list: hore živý simulátor (obrazovka + ovládače ako v Multisime), pod ním vysvetlenie krok za krokom. */
+:root {
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --ink: #17202a;
+  --muted: #5a6672;
+  --line: #d4dbe2;
+  --accent: #1d5fc4;
+  --accent-soft: #e3ecfa;
+  --good: #1f7a45;
+  --bad: #b42318;
+  --screen: #0a0c0e;
+  --grid: #39414a;
+  --axis: #8b949e;
+  --traceA: #ff4d4f;
+  --t1: #ff6b6b;
+  --t2: #5aa9ff;
+  --guide: #ffd166;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11151a; --surface: #192028; --ink: #e5e9ee; --muted: #9aa5b1; --line: #2b343e;
+    --accent: #6ea8ff; --accent-soft: #1c2b42; --good: #4cc38a; --bad: #ff7b72;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11151a; --surface: #192028; --ink: #e5e9ee; --muted: #9aa5b1; --line: #2b343e;
+  --accent: #6ea8ff; --accent-soft: #1c2b42; --good: #4cc38a; --bad: #ff7b72;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.55; }
+.wrap { max-width: 1180px; margin: 0 auto; padding: 24px 20px 64px; display: grid; gap: 28px; }
+h1, h2, h3 { text-wrap: balance; line-height: 1.2; margin: 0; }
+h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.01em; }
+h2 { font-size: 22px; font-weight: 700; }
+h3 { font-size: 16px; font-weight: 600; }
+p { margin: 0; }
+.lead { color: var(--muted); max-width: 70ch; margin-top: 6px; }
+.mono, .num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+.lab { display: grid; grid-template-columns: minmax(0, 1.55fr) minmax(280px, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 860px) { .lab { grid-template-columns: 1fr; } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 12px; }
+.panel-title { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.tag { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+
+.screen-wrap { background: #1b1f24; border-radius: 10px; padding: 12px; display: grid; gap: 10px; }
+canvas#scope { width: 100%; aspect-ratio: 10 / 8; display: block; border-radius: 4px; background: var(--screen); touch-action: none; cursor: ew-resize; }
+.readout { background: #f7f8fa; color: #111; border-radius: 6px; font-family: var(--font-mono); font-size: 13px; overflow-x: auto; }
+.readout table { border-collapse: collapse; width: 100%; min-width: 420px; }
+.readout th, .readout td { padding: 4px 10px; text-align: left; white-space: nowrap; }
+.readout th { font-weight: 600; color: #444; }
+.readout .lab1 { color: #c62828; font-weight: 600; }
+.readout .lab2 { color: #1565c0; font-weight: 600; }
+.cur-btns { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; color: #cfd6dd; font-size: 13px; }
+.cur-btns button { background: #2a3038; color: #e8ecef; border: 1px solid #444c56; }
+.hint-line { color: #b9c2cb; font-size: 13px; }
+
+.ctrl-group { display: grid; gap: 8px; }
+.row { display: grid; grid-template-columns: 128px 1fr; align-items: center; gap: 8px; }
+.row label, .row .lbl { font-size: 14px; color: var(--muted); }
+input[type="text"], select { font: inherit; font-family: var(--font-mono); font-size: 14px; padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); color: var(--ink); width: 100%; min-width: 0; }
+.pair { display: grid; grid-template-columns: 1fr 84px; gap: 6px; }
+.seg { display: flex; gap: 4px; flex-wrap: wrap; }
+button { font: inherit; font-size: 14px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.check { display: flex; gap: 8px; align-items: center; font-size: 14px; }
+.dmm { background: #0f1214; color: #e9f0f2; font-family: var(--font-mono); font-size: 26px; text-align: center; padding: 10px; border-radius: 6px; letter-spacing: 0.02em; }
+.hidden-gen { position: relative; }
+.hidden-gen.is-hidden .ctrl-group { filter: blur(5px); pointer-events: none; user-select: none; }
+.hidden-gen .veil { display: none; position: absolute; inset: 40px 0 0 0; place-items: center; text-align: center; font-weight: 600; color: var(--accent); }
+.hidden-gen.is-hidden .veil { display: grid; }
+
+.helper { border-left: 3px solid var(--accent); padding: 10px 14px; background: var(--accent-soft); border-radius: 0 8px 8px 0; font-size: 15px; display: grid; gap: 4px; }
+.helper b { font-family: var(--font-mono); font-weight: 600; }
+
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+.prose { display: grid; gap: 10px; max-width: 70ch; }
+.prose ul, .prose ol { margin: 0; padding-left: 22px; display: grid; gap: 4px; }
+table.t { border-collapse: collapse; width: 100%; font-size: 15px; }
+table.t th, table.t td { border-bottom: 1px solid var(--line); padding: 8px 10px; text-align: left; vertical-align: top; }
+table.t th { font-size: 13px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.tbl-wrap { overflow-x: auto; }
+.formula { font-family: var(--font-mono); background: var(--accent-soft); padding: 2px 6px; border-radius: 4px; white-space: nowrap; }
+.steps { counter-reset: s; display: grid; gap: 12px; padding: 0; margin: 0; list-style: none; }
+.steps li { counter-increment: s; display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: start; }
+.steps li::before { content: counter(s); font-family: var(--font-mono); font-weight: 600; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font-size: 14px; }
+
+.quiz { display: grid; gap: 10px; }
+.quiz .qrow { display: grid; grid-template-columns: 150px 1fr 70px 1fr; gap: 8px; align-items: center; }
+@media (max-width: 560px) { .quiz .qrow { grid-template-columns: 1fr 1fr; } }
+.ok { color: var(--good); font-weight: 600; }
+.ko { color: var(--bad); font-weight: 600; }
+.small { font-size: 13px; color: var(--muted); }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+</head>
+<body>
+<main class="wrap">
+
+<header>
+  <h1>Ako merať osciloskopom</h1>
+  <p class="lead">Simulátor rovnakého zapojenia ako v Multisime: generátor XFG1, osciloskop XSC1 a multimeter XMM1. Meň nastavenia vpravo, sleduj obrazovku a skús si odčítať amplitúdu, periódu a frekvenciu. Kurzory T1 a T2 posúvaš myšou priamo na obrazovke.</p>
+</header>
+
+<section class="lab" aria-label="Simulátor">
+  <div class="screen-wrap">
+    <canvas id="scope" aria-label="Obrazovka osciloskopu"></canvas>
+    <div class="cur-btns">
+      <span>T1</span><button id="t1l" aria-label="Kurzor T1 doľava">←</button><button id="t1r" aria-label="Kurzor T1 doprava">→</button>
+      <span style="margin-left:8px">T2</span><button id="t2l" aria-label="Kurzor T2 doľava">←</button><button id="t2r" aria-label="Kurzor T2 doprava">→</button>
+      <span class="hint-line" style="margin-left:auto">Kurzor chytíš myšou a potiahneš.</span>
+    </div>
+    <div class="readout">
+      <table>
+        <thead><tr><th></th><th>Time</th><th>Channel_A</th></tr></thead>
+        <tbody>
+          <tr><td class="lab1">T1</td><td id="r1t">–</td><td id="r1v">–</td></tr>
+          <tr><td class="lab2">T2</td><td id="r2t">–</td><td id="r2v">–</td></tr>
+          <tr><td>T2−T1</td><td id="rdt">–</td><td id="rdv">–</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="hint-line" id="scaleInfo"></div>
+  </div>
+
+  <div style="display:grid; gap:16px">
+    <div class="panel hidden-gen" id="genPanel">
+      <div class="panel-title"><h3>Generátor funkcií</h3><span class="tag">XFG1</span></div>
+      <div class="ctrl-group">
+        <div class="row"><span class="lbl">Tvar</span>
+          <div class="seg" id="shapeSeg">
+            <button data-v="sine" aria-pressed="true">sínus</button>
+            <button data-v="tri" aria-pressed="false">trojuholník</button>
+            <button data-v="square" aria-pressed="false">obdĺžnik</button>
+          </div></div>
+        <div class="row"><label for="freq">Frequency</label>
+          <div class="pair"><input id="freq" type="text" value="1" inputmode="decimal"><select id="funit" aria-label="Jednotka frekvencie"><option value="1">Hz</option><option value="1000" selected>kHz</option></select></div></div>
+        <div class="row"><label for="amp">Amplitude [Vp]</label><input id="amp" type="text" value="5" inputmode="decimal"></div>
+        <div class="row"><label for="off">Offset [V]</label><input id="off" type="text" value="0" inputmode="decimal"></div>
+      </div>
+      <div class="veil">Generátor je skrytý.<br>Zisti jeho nastavenie meraním.</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title"><h3>Osciloskop</h3><span class="tag">XSC1, kanál A</span></div>
+      <div class="ctrl-group">
+        <div class="row"><label for="tdiv">Timebase Scale</label>
+          <select id="tdiv"></select></div>
+        <div class="row"><label for="vdiv">Channel A Scale</label>
+          <select id="vdiv"></select></div>
+        <div class="row"><label for="ypos">Y pos. (Div)</label><input id="ypos" type="text" value="0" inputmode="decimal"></div>
+        <div class="row"><span class="lbl">Vazba</span>
+          <div class="seg" id="coupSeg">
+            <button data-v="AC" aria-pressed="false">AC</button>
+            <button data-v="GND" aria-pressed="false">0</button>
+            <button data-v="DC" aria-pressed="true">DC</button>
+          </div></div>
+        <div class="row"><span class="lbl">Trigger</span>
+          <div class="seg" id="trigSeg">
+            <button data-v="auto" aria-pressed="true">Auto</button>
+            <button data-v="none" aria-pressed="false">None</button>
+          </div></div>
+        <div class="row"><label for="level">Level [V]</label><input id="level" type="text" value="0" inputmode="decimal"></div>
+        <div class="row"><span class="lbl">Simulácia</span>
+          <div class="seg"><button id="runBtn" class="primary">Pauza (F6)</button></div></div>
+        <label class="check"><input type="checkbox" id="guides"> Ukáž pomôcky na obrazovke (amplitúda a perióda)</label>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title"><h3>Multimeter</h3><span class="tag">XMM1</span></div>
+      <div class="dmm" id="dmm" aria-live="polite">3,536 V</div>
+      <div class="seg" id="dmmSeg">
+        <button data-v="AC" aria-pressed="true">V ~ (AC)</button>
+        <button data-v="DC" aria-pressed="false">V — (DC)</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="helper" id="helper" aria-live="polite"></div>
+
+<section class="cols">
+  <div class="prose">
+    <h2>Čo je osciloskop</h2>
+    <p>Osciloskop je voltmeter, ktorý nekreslí jedno číslo, ale graf. Na obrazovke vidíš, ako sa napätie mení v čase.</p>
+    <ul>
+      <li><b>Vodorovná os je čas.</b> Ide zľava doprava.</li>
+      <li><b>Zvislá os je napätie.</b> Stredová čiara je 0 V, hore je kladné, dole záporné napätie.</li>
+      <li><b>Mriežka má dieliky (Div).</b> Vodorovne je ich 10, zvisle 8. Každý dielik má hodnotu, ktorú nastavíš ty.</li>
+    </ul>
+    <p>Všetko, čo meriaš, robíš rovnako: <b>spočítaš dieliky a vynásobíš ich hodnotou jedného dielika.</b></p>
+  </div>
+  <div class="prose">
+    <h2>Dva najdôležitejšie gombíky</h2>
+    <div class="tbl-wrap"><table class="t">
+      <thead><tr><th>V Multisime</th><th>Čo nastavuje</th><th>Príklad</th></tr></thead>
+      <tbody>
+        <tr><td><b>Timebase → Scale</b></td><td>koľko času je jeden dielik vodorovne</td><td class="mono">200 µs/Div → celá obrazovka 2 ms</td></tr>
+        <tr><td><b>Channel A → Scale</b></td><td>koľko voltov je jeden dielik zvisle</td><td class="mono">2 V/Div → 2,5 dielika = 5 V</td></tr>
+      </tbody>
+    </table></div>
+    <p>Ak je sínusovka príliš nahusto, zväčši Timebase. Ak je príliš nízka alebo vylieza z obrazovky, zmeň Channel A Scale.</p>
+  </div>
+</section>
+
+<section class="prose" style="max-width:none">
+  <h2>Ostatné ovládače osciloskopu v Multisime</h2>
+  <div class="tbl-wrap"><table class="t">
+    <thead><tr><th>Ovládač</th><th>Na čo slúži</th><th>Kedy ho použiješ</th></tr></thead>
+    <tbody>
+      <tr><td><b>Y pos. (Div)</b></td><td>posunie celý priebeh hore alebo dole o zadaný počet dielikov</td><td>keď chceš dve krivky od seba oddeliť alebo vrchol dostať na obrazovku</td></tr>
+      <tr><td><b>X pos. (Div)</b></td><td>posunie priebeh doľava alebo doprava</td><td>zriedka, väčšinou necháš 0</td></tr>
+      <tr><td><b>AC / 0 / DC</b></td><td>DC ukáže celé napätie, AC odstráni jednosmernú zložku (offset), 0 ukáže len nulovú čiaru</td><td>pri signáli s offsetom, keď chceš vidieť len striedavú časť</td></tr>
+      <tr><td><b>Trigger → Edge</b></td><td>na ktorej hrane (stúpajúcej alebo klesajúcej) sa začne kresliť</td><td>necháš stúpajúcu</td></tr>
+      <tr><td><b>Trigger → Level</b></td><td>pri akom napätí sa začne kresliť</td><td>necháš 0 V; ak je signál celý nad touto hodnotou, obraz sa nezastaví</td></tr>
+      <tr><td><b>Auto / Normal / Single / None</b></td><td>Auto a Normal držia obraz na mieste, Single urobí jeden záber, None nespúšťa nič a obraz uteká</td><td>na meranie Auto alebo Normal, na „fotku“ Single</td></tr>
+      <tr><td><b>T1, T2</b></td><td>dva kurzory, osciloskop vypíše čas a napätie v ich mieste a rozdiel T2−T1</td><td>na presné meranie periódy a amplitúdy</td></tr>
+      <tr><td><b>Pauza (F6)</b></td><td>zastaví simuláciu, obraz zamrzne</td><td>keď sa obraz hýbe a chceš v pokoji odčítať</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section class="cols">
+  <div class="prose">
+    <h2>Ako zmerať jednotlivé veličiny</h2>
+    <ol class="steps">
+      <li><div><b>Amplitúda Um</b>: spočítaj, koľko dielikov je horný vrchol nad stredovou čiarou, a vynásob hodnotou Channel A Scale. <br><span class="formula">2,5 Div × 2 V/Div = 5 V</span></div></li>
+      <li><div><b>Napätie špička–špička Upp</b>: od spodného po horný vrchol. <br><span class="formula">5 Div × 2 V/Div = 10 V = 2 · Um</span></div></li>
+      <li><div><b>Perióda T</b>: spočítaj, koľko dielikov má jeden celý kmit (napr. od vrcholu po ďalší vrchol), a vynásob hodnotou Timebase. <br><span class="formula">5 Div × 200 µs/Div = 1 ms</span></div></li>
+      <li><div><b>Frekvencia f</b>: vypočítaš z periódy. <br><span class="formula">f = 1 / T = 1 / 0,001 s = 1000 Hz = 1 kHz</span></div></li>
+      <li><div><b>Presnejšie kurzormi</b>: T1 daj na jeden vrchol, T2 na nasledujúci. Riadok T2−T1 ukáže periódu priamo. V stĺpci Channel_A vidíš napätie vrcholu, teda amplitúdu.</div></li>
+      <li><div><b>Efektívna hodnota Uef</b>: odčítaš z multimetra v režime AC, alebo vypočítaš. <br><span class="formula">Uef = Um / √2 = 5 / 1,414 = 3,54 V</span></div></li>
+    </ol>
+  </div>
+  <div class="prose">
+    <h2>Prečo multimeter ukazuje menej</h2>
+    <p>Generátor je nastavený na 5 V, ale multimeter ukáže 3,54 V. Nie je to chyba. Multimeter v režime AC meria <b>efektívnu hodnotu</b>: také jednosmerné napätie, ktoré by na rezistore vytvorilo rovnaké teplo.</p>
+    <div class="tbl-wrap"><table class="t">
+      <thead><tr><th>Tvar</th><th>Uef</th><th>Pri Um = 5 V</th></tr></thead>
+      <tbody>
+        <tr><td>sínus</td><td class="mono">Um / √2</td><td class="mono">3,54 V</td></tr>
+        <tr><td>trojuholník</td><td class="mono">Um / √3</td><td class="mono">2,89 V</td></tr>
+        <tr><td>obdĺžnik</td><td class="mono">Um</td><td class="mono">5,00 V</td></tr>
+      </tbody>
+    </table></div>
+    <p>Napätie v zásuvke 230 V je tiež efektívna hodnota. Jeho amplitúda je 230 · √2 ≈ 325 V.</p>
+    <p class="small">Pozor v Multisime: desatinné čísla píš s bodkou (0.5, nie 0,5). Tento simulátor berie oboje.</p>
+  </div>
+</section>
+
+<section class="prose" style="max-width:none">
+  <h2>Vyskúšaj si v simulátore</h2>
+  <ol>
+    <li>Pri nastavení 2 V/Div a 200 µs/Div spočítaj dieliky a urč Um, Upp, T a f. Potom zapni pomôcky a over sa.</li>
+    <li>Zmeň frekvenciu na 50 Hz. Uvidíš len kúsok kmitu. Zmeň Timebase tak, aby boli na obrazovke 2 až 3 periódy (skús 5 ms/Div).</li>
+    <li>Prepni tvar na trojuholník a obdĺžnik. Amplitúda sa nezmení, ale multimeter áno. Prečo?</li>
+    <li>Nastav Offset 2 V. Sínusovka vyskočí o 1 dielik hore. Prepni vazbu na AC a sleduj, čo sa stane. Prepni multimeter na DC.</li>
+    <li>Prepni Trigger na None. Obraz začne utekať. Preto pri meraní používame Auto alebo Normal.</li>
+    <li>Klikni na Nový neznámy signál nižšie a zmeraj ho bez toho, aby si videl nastavenie generátora.</li>
+  </ol>
+</section>
+
+<section class="panel" aria-label="Neznámy signál">
+  <div class="panel-title"><h2>Neznámy signál</h2><span class="tag">over sa</span></div>
+  <p>Generátor sa skryje a nastaví náhodnú sínusovku. Nastav osciloskop tak, aby si ju dobre videl, zmeraj ju a zapíš výsledky. Za správne sa počíta odchýlka do 5 %.</p>
+  <div class="seg"><button class="primary" id="mysteryBtn">Nový neznámy signál</button><button id="mysteryEnd">Ukonči a ukáž generátor</button></div>
+  <div class="quiz" id="quiz" hidden>
+    <div class="qrow"><label for="qUm">Um [V]</label><input id="qUm" type="text" inputmode="decimal"><span></span><span id="aUm"></span></div>
+    <div class="qrow"><label for="qUpp">Upp [V]</label><input id="qUpp" type="text" inputmode="decimal"><span></span><span id="aUpp"></span></div>
+    <div class="qrow"><label for="qT">T [ms]</label><input id="qT" type="text" inputmode="decimal"><span></span><span id="aT"></span></div>
+    <div class="qrow"><label for="qF">f [Hz]</label><input id="qF" type="text" inputmode="decimal"><span></span><span id="aF"></span></div>
+    <div class="qrow"><label for="qUef">Uef [V]</label><input id="qUef" type="text" inputmode="decimal"><span></span><span id="aUef"></span></div>
+    <div class="seg"><button class="primary" id="checkBtn">Skontrolovať</button><button id="solveBtn">Ukáž riešenie</button></div>
+    <p id="quizMsg" aria-live="polite"></p>
+  </div>
+</section>
+
+</main>
+
+<script>
+(function () {
+  const TDIVS = [10e-6, 20e-6, 50e-6, 100e-6, 200e-6, 500e-6, 1e-3, 2e-3, 5e-3, 10e-3, 20e-3];
+  const VDIVS = [0.2, 0.5, 1, 2, 5, 10];
+  const S = { shape: 'sine', f: 1000, Um: 5, off: 0, tdiv: 200e-6, vdiv: 2, ypos: 0, coupling: 'DC', trig: 'auto', level: 0,
+              running: true, c1: 1.25, c2: 6.25, guides: false, dmm: 'AC', freePhase: 0, mystery: null };
+  const $ = id => document.getElementById(id);
+  const num = s => { const v = parseFloat(String(s).trim().replace(',', '.')); return isFinite(v) ? v : NaN; };
+  const fmt = (x, d) => x.toFixed(d).replace('.', ',').replace('-', '−');
+  function fmtTime(s) {
+    const a = Math.abs(s);
+    if (a < 1e-3) return fmt(s * 1e6, 1) + ' µs';
+    if (a < 1) return fmt(s * 1e3, 3) + ' ms';
+    return fmt(s, 3) + ' s';
+  }
+  function fmtDiv(s) {
+    if (s < 1e-3) return Math.round(s * 1e6) + ' µs/Div';
+    if (s < 1) return Math.round(s * 1e3) + ' ms/Div';
+    return s + ' s/Div';
+  }
+
+  // selects
+  TDIVS.forEach(t => { const o = document.createElement('option'); o.value = t; o.textContent = fmtDiv(t); if (t === S.tdiv) o.selected = true; $('tdiv').appendChild(o); });
+  VDIVS.forEach(v => { const o = document.createElement('option'); o.value = v; o.textContent = String(v).replace('.', ',') + ' V/Div'; if (v === S.vdiv) o.selected = true; $('vdiv').appendChild(o); });
+
+  function seg(id, key, after) {
+    const el = $(id);
+    el.addEventListener('click', e => {
+      const b = e.target.closest('button'); if (!b) return;
+      S[key] = b.dataset.v;
+      el.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+      if (after) after();
+      update();
+    });
+  }
+  function setSeg(id, v) { $(id).querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x.dataset.v === v ? 'true' : 'false')); }
+  seg('shapeSeg', 'shape'); seg('coupSeg', 'coupling'); seg('trigSeg', 'trig'); seg('dmmSeg', 'dmm');
+
+  function readGen() {
+    const f = num($('freq').value) * Number($('funit').value);
+    if (f > 0) S.f = Math.min(f, 1e6);
+    const a = num($('amp').value); if (a >= 0) S.Um = a;
+    const o = num($('off').value); if (!isNaN(o)) S.off = o;
+  }
+  ['freq', 'amp', 'off'].forEach(id => $(id).addEventListener('input', () => { readGen(); update(); }));
+  $('funit').addEventListener('change', () => { readGen(); update(); });
+  $('tdiv').addEventListener('change', e => { S.tdiv = Number(e.target.value); update(); });
+  $('vdiv').addEventListener('change', e => { S.vdiv = Number(e.target.value); update(); });
+  $('ypos').addEventListener('input', e => { const v = num(e.target.value); if (!isNaN(v)) S.ypos = Math.max(-4, Math.min(4, v)); update(); });
+  $('level').addEventListener('input', e => { const v = num(e.target.value); if (!isNaN(v)) S.level = v; update(); });
+  $('guides').addEventListener('change', e => { S.guides = e.target.checked; update(); });
+  $('runBtn').addEventListener('click', toggleRun);
+  document.addEventListener('keydown', e => { if (e.key === 'F6') { e.preventDefault(); toggleRun(); } });
+  function toggleRun() { S.running = !S.running; $('runBtn').textContent = S.running ? 'Pauza (F6)' : 'Spustiť (F6)'; update(); }
+
+  // signal model
+  function wave(p) {
+    p = p - Math.floor(p);
+    if (S.shape === 'sine') return Math.sin(2 * Math.PI * p);
+    if (S.shape === 'tri') return p < 0.25 ? 4 * p : (p < 0.75 ? 2 - 4 * p : 4 * p - 4);
+    return p < 0.5 ? 1 : -1;
+  }
+  function vRaw(p) { return S.off + S.Um * wave(p); }
+  function vDisp(p) { if (S.coupling === 'GND') return 0; return S.coupling === 'AC' ? vRaw(p) - S.off : vRaw(p); }
+  function triggerPhase() {
+    if (S.coupling === 'GND' || S.Um === 0) return null;
+    const n = 4000;
+    for (let i = 0; i < n; i++) {
+      const a = vDisp(i / n), b = vDisp((i + 1) / n);
+      if (a < S.level && b >= S.level) return (i + 1) / n;
+    }
+    return null;
+  }
+  let p0 = 0, triggered = false;
+  function phaseAt(divX) { return p0 + S.f * divX * S.tdiv; }
+
+  // canvas
+  const cv = $('scope'), ctx = cv.getContext('2d');
+  function resize() {
+    const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+    cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr);
+  }
+  window.addEventListener('resize', () => { resize(); draw(); });
+
+  function draw() {
+    const W = cv.width, H = cv.height, dx = W / 10, dy = H / 8, dpr = window.devicePixelRatio || 1;
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = getCss('--screen'); ctx.fillRect(0, 0, W, H);
+    // grid
+    ctx.strokeStyle = getCss('--grid'); ctx.lineWidth = 1 * dpr; ctx.setLineDash([3 * dpr, 4 * dpr]);
+    for (let i = 1; i < 10; i++) { line(i * dx, 0, i * dx, H); }
+    for (let j = 1; j < 8; j++) { line(0, j * dy, W, j * dy); }
+    ctx.setLineDash([]);
+    ctx.strokeStyle = getCss('--axis');
+    line(0, H / 2, W, H / 2); line(W / 2, 0, W / 2, H);
+    for (let i = 0; i <= 50; i++) { const x = i * dx / 5; line(x, H / 2 - 3 * dpr, x, H / 2 + 3 * dpr); }
+    for (let j = 0; j <= 40; j++) { const y = j * dy / 5; line(W / 2 - 3 * dpr, y, W / 2 + 3 * dpr, y); }
+    // trace
+    const yOf = v => H / 2 - (v / S.vdiv + S.ypos) * dy;
+    ctx.save(); ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
+    ctx.strokeStyle = getCss('--traceA'); ctx.lineWidth = 2 * dpr; ctx.beginPath();
+    const N = Math.max(800, Math.round(W));
+    for (let k = 0; k <= N; k++) {
+      const divX = 10 * k / N, x = divX * dx, y = yOf(vDisp(phaseAt(divX)));
+      if (k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+    // guides
+    if (S.guides && S.coupling !== 'GND') {
+      const center = S.coupling === 'AC' ? 0 : S.off;
+      const top = center + S.Um, bot = center - S.Um;
+      ctx.strokeStyle = getCss('--guide'); ctx.fillStyle = getCss('--guide'); ctx.lineWidth = 1.5 * dpr; ctx.setLineDash([6 * dpr, 5 * dpr]);
+      line(0, yOf(top), W, yOf(top)); line(0, yOf(bot), W, yOf(bot));
+      ctx.font = (12 * dpr) + 'px ' + getCss('--font-mono');
+      const divTop = top / S.vdiv;
+      ctx.fillText('horný vrchol: ' + fmt(divTop, 2) + ' Div × ' + String(S.vdiv).replace('.', ',') + ' V = ' + fmt(top, 2) + ' V', 8 * dpr, yOf(top) - 6 * dpr);
+      ctx.fillText('Upp = ' + fmt(2 * S.Um / S.vdiv, 2) + ' Div', 8 * dpr, yOf(bot) + 16 * dpr);
+      if (triggered) {
+        const Tdiv = 1 / S.f / S.tdiv;
+        if (Tdiv <= 10) {
+          line(0, 0, 0, H); line(Tdiv * dx, 0, Tdiv * dx, H);
+          ctx.setLineDash([]);
+          const yy = H - 14 * dpr;
+          line(0, yy, Tdiv * dx, yy);
+          ctx.fillText('T = ' + fmt(Tdiv, 2) + ' Div × ' + fmtDiv(S.tdiv).replace('/Div', '') + ' = ' + fmtTime(1 / S.f), Math.min(Tdiv * dx + 6 * dpr, W - 260 * dpr), yy - 6 * dpr);
+        }
+      }
+      ctx.setLineDash([]);
+    }
+    ctx.restore();
+    // cursors
+    drawCursor(S.c1, getCss('--t1'), '1'); drawCursor(S.c2, getCss('--t2'), '2');
+    function drawCursor(c, col, lab) {
+      const x = c * dx; ctx.strokeStyle = col; ctx.fillStyle = col; ctx.lineWidth = 1.5 * dpr;
+      line(x, 0, x, H);
+      ctx.beginPath(); ctx.moveTo(x - 7 * dpr, 0); ctx.lineTo(x + 7 * dpr, 0); ctx.lineTo(x, 10 * dpr); ctx.closePath(); ctx.fill();
+      ctx.font = 'bold ' + (12 * dpr) + 'px ' + getCss('--font-mono'); ctx.fillText(lab, x + 9 * dpr, 13 * dpr);
+    }
+    function line(a, b, c, d) { ctx.beginPath(); ctx.moveTo(a, b); ctx.lineTo(c, d); ctx.stroke(); }
+  }
+  const cssCache = {};
+  function getCss(n) { return getComputedStyle(document.documentElement).getPropertyValue(n).trim() || cssCache[n]; }
+
+  // cursor drag
+  let drag = null;
+  cv.addEventListener('pointerdown', e => {
+    const r = cv.getBoundingClientRect(), d = (e.clientX - r.left) / r.width * 10;
+    const d1 = Math.abs(d - S.c1), d2 = Math.abs(d - S.c2);
+    drag = d1 <= d2 ? 'c1' : 'c2';
+    S[drag] = clampC(d); cv.setPointerCapture(e.pointerId); update();
+  });
+  cv.addEventListener('pointermove', e => { if (!drag) return; const r = cv.getBoundingClientRect(); S[drag] = clampC((e.clientX - r.left) / r.width * 10); update(); });
+  cv.addEventListener('pointerup', () => { drag = null; });
+  const clampC = v => Math.max(0, Math.min(10, v));
+  const step = (k, d) => () => { S[k] = clampC(Math.round((S[k] + d) * 100) / 100); update(); };
+  $('t1l').onclick = step('c1', -0.05); $('t1r').onclick = step('c1', 0.05); $('t2l').onclick = step('c2', -0.05); $('t2r').onclick = step('c2', 0.05);
+
+  function rmsAC() { if (S.shape === 'sine') return S.Um / Math.SQRT2; if (S.shape === 'tri') return S.Um / Math.sqrt(3); return S.Um; }
+
+  function update() {
+    const tp = S.trig === 'auto' ? triggerPhase() : null;
+    triggered = tp !== null;
+    if (triggered) p0 = tp; else p0 = S.freePhase;
+    draw();
+    // readouts
+    const t1 = S.c1 * S.tdiv, t2 = S.c2 * S.tdiv;
+    const v1 = vDisp(phaseAt(S.c1)), v2 = vDisp(phaseAt(S.c2));
+    $('r1t').textContent = fmtTime(t1); $('r2t').textContent = fmtTime(t2); $('rdt').textContent = fmtTime(t2 - t1);
+    $('r1v').textContent = fmt(v1, 3) + ' V'; $('r2v').textContent = fmt(v2, 3) + ' V'; $('rdv').textContent = fmt(v2 - v1, 3) + ' V';
+    $('dmm').textContent = (S.dmm === 'AC' ? fmt(rmsAC(), 3) : fmt(S.off, 3)) + ' V';
+    $('scaleInfo').textContent = '1 dielik vodorovne = ' + fmtDiv(S.tdiv).replace('/Div', '') + ', celá obrazovka = ' + fmtTime(10 * S.tdiv) + '. 1 dielik zvisle = ' + String(S.vdiv).replace('.', ',') + ' V.';
+    // helper
+    const T = 1 / S.f, perScreen = 10 * S.tdiv / T, h = $('helper');
+    let msg = [];
+    if (S.mystery) msg.push('<span>Meriaš neznámy signál. Nastav Timebase a Channel A Scale tak, aby si videl 2 až 3 periódy a vrchol bol aspoň 2 dieliky nad stredom.</span>');
+    else {
+      msg.push('<span>Na obrazovke je <b>' + fmt(perScreen, 1) + '</b> periód. ' + (perScreen > 6 ? 'Je to nahusto: zväčši Timebase.' : perScreen < 1 ? 'Nevidíš ani celý kmit: zmenši Timebase.' : 'Dobré na meranie.') + '</span>');
+      const peakDiv = (S.coupling === 'AC' ? S.Um : S.off + S.Um) / S.vdiv;
+      msg.push('<span>Vrchol je <b>' + fmt(peakDiv, 2) + '</b> dielika nad stredom. ' + (Math.abs(peakDiv) + Math.abs(S.ypos) > 4 ? 'Vylieza z obrazovky: zväčši Channel A Scale.' : Math.abs(peakDiv) < 1 ? 'Je nízko: zmenši Channel A Scale, odčítanie bude presnejšie.' : '') + '</span>');
+    }
+    if (S.trig === 'none') msg.push('<span>Trigger je vypnutý, preto obraz uteká. Prepni na Auto.</span>');
+    else if (!triggered && S.coupling !== 'GND') msg.push('<span>Trigger nenašiel napätie ' + fmt(S.level, 2) + ' V, preto sa obraz nezastaví. Nastav Level do rozsahu signálu (napr. 0 V) alebo prepni vazbu na AC.</span>');
+    h.innerHTML = msg.join('');
+  }
+
+  // animation for free-running
+  let last = performance.now();
+  function loop(now) {
+    const dt = (now - last) / 1000; last = now;
+    if (S.running && !triggered) { S.freePhase = (S.freePhase + dt * 0.6) % 1; update(); }
+    requestAnimationFrame(loop);
+  }
+
+  // mystery
+  function setGenInputs() {
+    if (S.f >= 1000) { $('freq').value = String(S.f / 1000).replace('.', ','); $('funit').value = '1000'; }
+    else { $('freq').value = String(S.f).replace('.', ','); $('funit').value = '1'; }
+    $('amp').value = String(S.Um).replace('.', ','); $('off').value = String(S.off).replace('.', ',');
+    setSeg('shapeSeg', S.shape);
+  }
+  $('mysteryBtn').onclick = () => {
+    const fs = [50, 100, 200, 250, 500, 1000, 2000, 2500, 5000];
+    const ams = [1, 1.5, 2, 3, 4, 6, 8];
+    S.mystery = { f: fs[Math.floor(Math.random() * fs.length)], Um: ams[Math.floor(Math.random() * ams.length)] };
+    S.shape = 'sine'; S.f = S.mystery.f; S.Um = S.mystery.Um; S.off = 0; setGenInputs();
+    $('genPanel').classList.add('is-hidden'); $('quiz').hidden = false; $('quizMsg').textContent = '';
+    ['Um', 'Upp', 'T', 'F', 'Uef'].forEach(k => { $('q' + k).value = ''; $('a' + k).textContent = ''; });
+    update();
+  };
+  $('mysteryEnd').onclick = () => { S.mystery = null; $('genPanel').classList.remove('is-hidden'); $('quiz').hidden = true; update(); };
+  function answers() { const m = S.mystery; return { Um: m.Um, Upp: 2 * m.Um, T: 1000 / m.f, F: m.f, Uef: m.Um / Math.SQRT2 }; }
+  $('checkBtn').onclick = () => {
+    if (!S.mystery) return;
+    const a = answers(); let good = 0, filled = 0;
+    Object.keys(a).forEach(k => {
+      const v = num($('q' + k).value), out = $('a' + k);
+      if (isNaN(v)) { out.textContent = 'nevyplnené'; out.className = 'small'; return; }
+      filled++;
+      const ok = Math.abs(v - a[k]) <= 0.05 * Math.abs(a[k]);
+      if (ok) good++;
+      out.textContent = ok ? 'správne' : 'skús znova'; out.className = ok ? 'ok' : 'ko';
+    });
+    $('quizMsg').textContent = filled ? 'Správne máš ' + good + ' z 5.' : 'Najprv vyplň aspoň jednu hodnotu.';
+  };
+  $('solveBtn').onclick = () => {
+    if (!S.mystery) return;
+    const a = answers();
+    $('aUm').textContent = fmt(a.Um, 2) + ' V'; $('aUpp').textContent = fmt(a.Upp, 2) + ' V';
+    $('aT').textContent = fmt(a.T, 3) + ' ms'; $('aF').textContent = a.F + ' Hz'; $('aUef').textContent = fmt(a.Uef, 2) + ' V';
+    ['Um', 'Upp', 'T', 'F', 'Uef'].forEach(k => $('a' + k).className = 'small');
+    $('quizMsg').textContent = 'Riešenie: perióda T = 1 / f, Upp = 2 · Um, Uef = Um / √2.';
+  };
+
+  resize(); update(); requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
